@@ -1,0 +1,55 @@
+name: Test EPG Update
+
+# Trigger manually (button) or daily
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 21 * * *' # Runs at 3:00 AM IST (21:30 UTC)
+
+jobs:
+  update-epg:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Critical: Allows the bot to save files to your repo
+
+    steps:
+      # 1. Get your code
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. Install Node.js
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # 3. Install Tools
+      - name: Install Dependencies
+        run: |
+          npm install
+          sudo npm install -g tsx
+
+      # 4. Grab Channels (The 3 specific sites)
+      - name: Grab EPGs
+        run: |
+          # Whats On India (Master Source)
+          npm run grab -- --site=whats-on-india.com --lang=en --days=1 --output=woi.xml
+          gzip -9 -f woi.xml
+
+          # D2H (Videocon)
+          npm run grab -- --site=d2h.com --lang=en --days=1 --output=d2h.xml
+          gzip -9 -f d2h.xml
+
+          # Sun Direct (South India)
+          npm run grab -- --site=sundirect.in --lang=en --days=1 --output=sundirect.xml
+          gzip -9 -f sundirect.xml
+
+      # 5. Save Files to Repo (No Azure)
+      - name: Commit and Push
+        run: |
+          git config --global user.name "EPG Bot"
+          git config --global user.email "bot@github.com"
+          git add *.xml.gz
+          # Only commit if there are changes
+          git commit -m "Update EPG: $(date)" || exit 0
+          git push
