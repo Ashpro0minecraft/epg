@@ -1,55 +1,57 @@
 name: Test EPG Update
 
-# Trigger manually (button) or daily
 on:
   workflow_dispatch:
   schedule:
-    - cron: '30 21 * * *' # Runs at 3:00 AM IST (21:30 UTC)
+    - cron: '30 21 * * *' # 3:00 AM IST
 
 jobs:
   update-epg:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Critical: Allows the bot to save files to your repo
+      contents: write
 
     steps:
-      # 1. Get your code
-      - name: Checkout Code
+      # 1. Checkout YOUR repo (so we can save the XMLs here later)
+      - name: Checkout Your Repo
         uses: actions/checkout@v4
 
-      # 2. Install Node.js
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      # 2. Download the EPG Tool (The missing part!)
+      - name: Clone EPG Tool
+        run: git clone https://github.com/iptv-org/epg.git tool
 
-      # 3. Install Tools
+      # 3. Install Dependencies (Inside the tool folder)
       - name: Install Dependencies
+        working-directory: ./tool
         run: |
           npm install
           sudo npm install -g tsx
 
-      # 4. Grab Channels (The 3 specific sites)
+      # 4. Grab Channels
       - name: Grab EPGs
+        working-directory: ./tool
         run: |
-          # Whats On India (Master Source)
-          npm run grab -- --site=whats-on-india.com --lang=en --days=1 --output=woi.xml
+          # Whats On India
+          npm run grab -- --site=whats-on-india.com --lang=en --days=1 --output=../woi.xml
+          
+          # D2H
+          npm run grab -- --site=d2h.com --lang=en --days=1 --output=../d2h.xml
+          
+          # Sun Direct
+          npm run grab -- --site=sundirect.in --lang=en --days=1 --output=../sundirect.xml
+
+      # 5. Compress Files
+      - name: Compress
+        run: |
           gzip -9 -f woi.xml
-
-          # D2H (Videocon)
-          npm run grab -- --site=d2h.com --lang=en --days=1 --output=d2h.xml
           gzip -9 -f d2h.xml
-
-          # Sun Direct (South India)
-          npm run grab -- --site=sundirect.in --lang=en --days=1 --output=sundirect.xml
           gzip -9 -f sundirect.xml
 
-      # 5. Save Files to Repo (No Azure)
+      # 6. Save to Your Repo
       - name: Commit and Push
         run: |
           git config --global user.name "EPG Bot"
           git config --global user.email "bot@github.com"
           git add *.xml.gz
-          # Only commit if there are changes
-          git commit -m "Update EPG: $(date)" || exit 0
+          git commit -m "Auto-Update: $(date)" || exit 0
           git push
